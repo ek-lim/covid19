@@ -1,0 +1,222 @@
+---
+title: "COVID_1"
+author: "eklim"
+date: '2020 4 12 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd('C:\\Users\\EK\\Documents\\E\\COVID')
+options(scipen=100)
+
+```
+
+### 환경 설정
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+```
+
+#### File 리스트 추출해서 넣기
+
+```{r}
+
+files <- list.files()
+a <- 1:10
+
+
+KR_COVID19 <- read_excel("../KR_COVID19.xlsx", 
+                         sheet = "Sheet2", na= "")
+KR_COVID19$Release <- as.numeric(KR_COVID19$Release)
+
+View(KR_COVID19)
+```
+
+```{r include=FALSE}
+
+
+a_fashion <-      read_excel(files[1], sheet="데이터세트1")
+i_book <-         read_excel(files[2], sheet="데이터세트1")
+i_shop <-         read_excel(files[3], sheet="데이터세트1")
+i_tour <-         read_excel(files[4], sheet="데이터세트1")
+i_ticket <-       read_excel(files[5], sheet="데이터세트1")
+m_shop <-         read_excel(files[6], sheet="데이터세트1")
+m_webtoon <-      read_excel(files[7], sheet="데이터세트1")
+m_media <-        read_excel(files[8], sheet="데이터세트1")
+w_shop <-         read_excel(files[9], sheet="데이터세트1")
+w_fund <-         read_excel(files[10], sheet="데이터세트1")
+
+KR_COVID19$Date <- format(KR_COVID19$Date, '%Y-%m-%d')
+KR_COVID19$Date <- as.Date(KR_COVID19$Date)
+
+
+```
+
+#### COVID 테이블에서 Plot 그려보기
+
+
+```{r}
+
+ggplot(data = KR_COVID19) +
+  geom_line(color = 'red',  aes(x = Date, y = Quarantine)) +
+  geom_line(color = 'blue', aes(x = Date, y = Release))
+
+#  geom_point(data = KR_COVID19, aes(y = Release))
+```
+
+#### 분석자료 테이블에서 그려보기
+
+어떻게 생겼나 살펴보고
+
+```{r}
+str(m_webtoon)
+```
+
+```{r}
+m_webtoon$`날짜` <- as.Date(m_webtoon$`날짜`, format='%Y%m%d')
+```
+
+```{r 주말표시}
+#1년 일자를 생성하고 요일 표시하기
+
+#시작일 지정
+start_date <- as.Date("2020-01-27")
+#종료일 지정
+end_date <- as.Date("2020-04-12")
+
+#일단위로 일련의 날짜 생성하기
+df <-data.frame(seq(as.Date(start_date), as.Date(end_date), by=1))
+names(df) <-"date_yr"
+df$weekday <- weekdays(as.Date(df$date_yr))
+
+myData = df[(df$weekday == '토요일') | (df$weekday == "일요일"),]
+head(myData)
+tail(myData)
+```
+
+
+
+```{r}
+m_webtoon %>% ggplot() +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+  geom_point(aes(x=`날짜`, y=`수익`), color = 'red') +
+  geom_point(aes(x=`날짜`, y=`페이지뷰 수`*25), color = 'blue') +
+  scale_y_continuous(sec.axis = sec_axis(~.*25)) +
+  geom_vline(data = myData, xintercept = as.numeric(myData$date_yr), color = "red", linetype = 2) # 주말 표시
+
+
+```
+
+#### 한 눈에 그래프를 합쳐볼 수 없을까?
+
+수익과 관련한 내용은 지워야겠다!
+
+```{r 한번에 보기}
+ggplot() +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  geom_line(data = KR_COVID19, color = '#CC3399',  aes(x = Date, y = Quarantine*15000)) +
+  geom_line(data = KR_COVID19, color = '#FFCC00', aes(x = Date, y = Release*15000)) +
+  geom_line(data = m_webtoon, aes(x=`날짜`, y=`수익`), color = 'red') +
+  geom_line(data = m_webtoon, aes(x=`날짜`, y=`페이지뷰 수`*10), color = 'blue') +
+  scale_y_continuous(sec.axis = sec_axis(~./20000)) +
+  #annotate(data = KR_COVID19, geom = 'text', '사회적 거리') +
+  geom_vline(data = myData, xintercept = as.numeric(myData$date_yr), color = "gray", linetype = 2) # 주말 표시 
+  
+
+```
+
+이렇게 봐서는 큰 변화를 알 수가 없다..
+
+```{r 주차 추가}
+monday <- df[(df$weekday == '월요일'),"date_yr"]
+for (a in 1:10){
+  week[a] <- seq(mon[a], mon[a]+6, 1)
+}
+
+week <- vector()
+for(i in 1:11){
+  wk <- rep(paste0(i,"주차"),7)
+  week <- append(week, wk)
+}
+rm(wk)
+
+df <- cbind(df, week)
+
+```
+
+날짜를 기준으로 수익을 합쳐서 보고싶다
+
+```{r}
+
+m_w <- merge(df, m_webtoon, by.x = 'date_yr', by.y = '날짜')
+
+m_w %>%
+  group_by(week) %>%
+  summarize(`주차별 수익` = sum(`수익`)) %>%
+  filter(week!='11주차') %>%
+  ggplot(aes(x=week, y = `주차별 수익`)) +
+  #theme(axis.ticks.y = element_blank()) +
+  theme(
+        #axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        #axis.ticks.y=element_blank()
+        ) +
+  geom_count() +
+  scale_x_discrete(limits=c('1주차', '2주차', '3주차', '4주차', '5주차', '6주차', '7주차', '8주차', '9주차', '10주차'))
+```
+
+```{r}
+m_w %>%
+  group_by(week) %>%
+  mutate(`주차별 수익` = sum(`수익`)) %>%
+  filter(week!='11주차') %>%
+  ggplot() +
+  #theme(axis.ticks.y = element_blank()) +
+  theme(
+        #axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        #axis.ticks.y=element_blank()
+        ) +
+  geom_count(aes(x=date_yr, y = `주차별 수익`)) +
+  # geom_line(aes(x=date_yr, y = `))
+  scale_x_discrete(limits=c('1주차', '2주차', '3주차', '4주차', '5주차', '6주차', '7주차', '8주차', '9주차', '10주차'))
+```
+
+```{r}
+m_w2 %>%
+  group_by(week) %>%
+  mutate(`주차별 수익` = mean(`수익`)) %>%
+  filter(week!='11주차') %>%
+  ggplot() +
+  #theme(axis.ticks.y = element_blank()) +
+  theme(
+        #axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        #axis.ticks.y=element_blank()
+        ) +
+  geom_count(aes(x=date_yr, y = `주차별 수익`)) +
+  geom_line(aes(x=date_yr, y = Quarantine*10000))
+  scale_x_discrete(limits=c('1주차', '2주차', '3주차', '4주차', '5주차', '6주차', '7주차', '8주차', '9주차', '10주차'))
+```
+
+
+#### 투어는?
+
+```{r}
+i_tour$`날짜` <- as.Date(i_tour$`날짜`, format='%Y%m%d')
+```
+
+```{r}
+i_tour %>% ggplot() +
+  geom_line(aes(x=`날짜`, y=`수익`), color = 'red') +
+  geom_line(aes(x=`날짜`, y=`페이지뷰 수`*50), color = 'blue') +
+  scale_y_continuous(sec.axis = sec_axis(~.*50)) +
+  geom_vline(data = myData, xintercept = as.numeric(myData$date_yr), color = "red", linetype = 2) # 주말 표시
+```
